@@ -19,7 +19,6 @@ let lastIgnitionRand = null;
 let trails = [];
 
 let fireVolume = 0.3;
-const SHOW_DEBUG = true;
 
 function preload(){
 
@@ -87,10 +86,6 @@ function draw(){
 
   // 常に音量更新（燃焼中に fireSound が再生されていれば反映される）
   updateFireVolume();
-
-  if(SHOW_DEBUG){
-    drawDebugInfo();
-  }
 
   // オーディオがサスペンド中ならオーバーレイでタップを促す
   if(!isAudioRunning()){
@@ -327,29 +322,6 @@ function updateFireVolume(){
   
   // 速度減衰
   touchVelocity *= 0.88;
-}
-
-function drawDebugInfo(){
-
-  push();
-  noStroke();
-  fill(0, 160);
-  rect(12, 12, 260, 104, 8);
-
-  fill(255);
-  textSize(14);
-  textAlign(LEFT, TOP);
-
-  let ctxState = getAudioContext().state;
-  let velocityText = nf(touchVelocity, 1, 2);
-  let volumeText = nf(fireVolume, 1, 3);
-  let lastRandText = lastIgnitionRand === null ? "-" : nf(lastIgnitionRand, 1, 3);
-
-  text("ctx: " + ctxState, 22, 22);
-  text("velocity: " + velocityText, 22, 42);
-  text("volume: " + volumeText, 22, 62);
-  text("lastRand: " + lastRandText, 22, 82);
-  pop();
 }
 
 function drawTrails(){

@@ -54,6 +54,9 @@ function setup(){
   fireVideo.volume(0);
 
   strokeCap(ROUND);
+
+  // 許可プロンプトなしで直接リスナーをつけてみる（古いバージョンやPWA向け）
+  attachMotionListeners();
 }
 
 function attachMotionListeners(){
@@ -63,6 +66,7 @@ function attachMotionListeners(){
   }
 
   motionListenersAttached = true;
+  motionPermissionState = "listeners_attached_directly";
 
   // p5のacceleration値が取れない端末向けフォールバック
   window.addEventListener("devicemotion", function(event){

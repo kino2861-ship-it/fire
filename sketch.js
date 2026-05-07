@@ -189,8 +189,8 @@ function touchMoved(){
     // 着火音
     playTyakkaIfReady();
 
-    // 1スライドにつき1回だけ25%で着火判定
-    if(!ignitionRolledInCurrentDrag && random(1) < 0.25){
+    // 1スライドにつき1回だけ10%で着火判定
+    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
 
       ignitionRolledInCurrentDrag = true;
 
@@ -230,7 +230,7 @@ function mouseDragged(){
 
     playTyakkaIfReady();
 
-    if(!ignitionRolledInCurrentDrag && random(1) < 0.25){
+    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
 
       ignitionRolledInCurrentDrag = true;
 

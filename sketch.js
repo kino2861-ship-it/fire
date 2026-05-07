@@ -6,6 +6,9 @@ let tyakkaSound;
 let fireSound;
 
 let burning = false;
+let interactionReady = false;
+let motionPermissionRequested = false;
+let ignitionRolledInCurrentDrag = false;
 
 let trails = [];
 
@@ -27,6 +30,10 @@ function setup(){
   createCanvas(windowWidth, windowHeight);
 
   imageMode(CENTER);
+
+  // モバイルで別プレイヤー表示にならないようにする
+  fireVideo.attribute("playsinline", "");
+  fireVideo.attribute("webkit-playsinline", "");
 
   fireVideo.hide();
 
@@ -54,7 +61,8 @@ function draw(){
   // 燃焼状態
   if(burning){
 
-    blendMode(ADD);
+    // 黒背景を透過的に扱って炎だけを重ねる
+    blendMode(SCREEN);
 
     image(
       fireVideo,
@@ -70,20 +78,40 @@ function draw(){
   }
 }
 
-function touchStarted(){
+function ensureInteractionReady(){
 
-  // iPhone用許可
+  if(interactionReady){
+    return;
+  }
 
   userStartAudio();
 
-  if(DeviceMotionEvent.requestPermission){
-    DeviceMotionEvent.requestPermission();
+  if(
+    !motionPermissionRequested &&
+    typeof DeviceMotionEvent !== "undefined" &&
+    typeof DeviceMotionEvent.requestPermission === "function"
+  ){
+    motionPermissionRequested = true;
+
+    DeviceMotionEvent.requestPermission().catch(function(){
+      // 拒否時はそのまま継続
+    });
   }
+
+  interactionReady = true;
+}
+
+function touchStarted(){
+
+  ensureInteractionReady();
+  ignitionRolledInCurrentDrag = false;
 
   return false;
 }
 
 function touchMoved(){
+
+  ensureInteractionReady();
 
   if(!burning){
 
@@ -99,12 +127,70 @@ function touchMoved(){
       tyakkaSound.play();
     }
 
-    // 10%で着火
-    if(random(1) < 0.1){
+    // 1スライドにつき1回だけ10%で着火判定
+    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
+
+      ignitionRolledInCurrentDrag = true;
 
       startBurning();
     }
+
+    if(!ignitionRolledInCurrentDrag){
+      ignitionRolledInCurrentDrag = true;
+    }
   }
+
+  return false;
+}
+
+function mouseDragged(){
+
+  ensureInteractionReady();
+
+  if(!burning){
+
+    trails.push({
+      x: mouseX,
+      y: mouseY,
+      life: 255
+    });
+
+    if(!tyakkaSound.isPlaying()){
+      tyakkaSound.play();
+    }
+
+    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
+
+      ignitionRolledInCurrentDrag = true;
+
+      startBurning();
+    }
+
+    if(!ignitionRolledInCurrentDrag){
+      ignitionRolledInCurrentDrag = true;
+    }
+  }
+
+  return false;
+}
+
+function touchEnded(){
+
+  ignitionRolledInCurrentDrag = false;
+
+  return false;
+}
+
+function mousePressed(){
+
+  ignitionRolledInCurrentDrag = false;
+
+  return false;
+}
+
+function mouseReleased(){
+
+  ignitionRolledInCurrentDrag = false;
 
   return false;
 }

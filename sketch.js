@@ -62,15 +62,21 @@ function setup(){
 function attachMotionListeners(){
 
   if(motionListenersAttached){
+    console.log("Motion listeners already attached, skipping.");
     return;
   }
 
   motionListenersAttached = true;
   motionPermissionState = "listeners_attached_directly";
+  
+  console.log("Attaching motion listeners...");
+  console.log("DeviceMotionEvent available:", typeof DeviceMotionEvent !== "undefined");
+  console.log("DeviceOrientationEvent available:", typeof DeviceOrientationEvent !== "undefined");
 
   // p5のacceleration値が取れない端末向けフォールバック
   window.addEventListener("devicemotion", function(event){
     motionEventCount++;
+    console.log("devicemotion event received:", event);
 
     // 可能なら重力なし加速度を優先
     let src = event.acceleration || event.accelerationIncludingGravity;
@@ -107,6 +113,7 @@ function attachMotionListeners(){
   // devicemotionが使えない端末向けに角度変化も利用
   window.addEventListener("deviceorientation", function(event){
     orientationEventCount++;
+    console.log("deviceorientation event received:", event);
 
     let gamma = Number(event.gamma);
     let beta = Number(event.beta);
@@ -439,23 +446,27 @@ function drawDebugInfo(){
   push();
   noStroke();
   fill(0, 160);
-  rect(12, 12, 290, 124, 8);
+  rect(12, 12, 360, 144, 8);
 
   fill(255);
-  textSize(14);
+  textSize(12);
   textAlign(LEFT, TOP);
 
   let ctxState = getAudioContext().state;
   let shakeText = nf(latestMotionPower, 1, 3);
   let volumeText = nf(fireVolume, 1, 3);
   let secureText = window.isSecureContext ? "https/secure" : "not-secure";
-
+  let isStandalone = window.navigator.standalone === true ? "PWA" : "Browser";
+  
   text("ctx: " + ctxState, 22, 22);
-  text("shake: " + shakeText, 22, 42);
-  text("volume: " + volumeText, 22, 62);
-  text("motionPerm: " + motionPermissionState + " / oriPerm: " + orientationPermissionState, 22, 82);
-  text("motionEvt: " + motionEventCount + " / oriEvt: " + orientationEventCount, 22, 102);
-  text("context: " + secureText, 22, 122);
+  text("shake: " + shakeText, 22, 36);
+  text("volume: " + volumeText, 22, 50);
+  text("motionPerm: " + motionPermissionState + " / oriPerm: " + orientationPermissionState, 22, 64);
+  text("motionEvt: " + motionEventCount + " / oriEvt: " + orientationEventCount, 22, 78);
+  text("context: " + secureText + " / " + isStandalone, 22, 92);
+  text("listeners: " + (motionListenersAttached ? "ON" : "OFF"), 22, 106);
+  text("deviceMotionAPI: " + (typeof DeviceMotionEvent !== "undefined" ? "YES" : "NO"), 22, 120);
+  text("deviceOrientationAPI: " + (typeof DeviceOrientationEvent !== "undefined" ? "YES" : "NO"), 22, 134);
   pop();
 }
 

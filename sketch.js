@@ -196,12 +196,12 @@ function touchMoved(){
 
     // 1スライドにつき1回だけ10%で着火判定（ログ追加）
     if(!ignitionRolledInCurrentDrag){
+      ignitionRolledInCurrentDrag = true;
       let r = random(1);
       lastIgnitionRand = r;
       console.log('ignition-check', r, ignitionRolledInCurrentDrag);
 
       if(r < 0.1){
-        ignitionRolledInCurrentDrag = true;
         startBurning();
       }
     }
@@ -240,12 +240,12 @@ function mouseDragged(){
     playTyakkaIfReady();
 
     if(!ignitionRolledInCurrentDrag){
+      ignitionRolledInCurrentDrag = true;
       let r = random(1);
       lastIgnitionRand = r;
       console.log('ignition-check (mouse)', r, ignitionRolledInCurrentDrag);
 
       if(r < 0.1){
-        ignitionRolledInCurrentDrag = true;
         startBurning();
       }
     }

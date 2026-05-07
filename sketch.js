@@ -91,6 +91,11 @@ function draw(){
   if(SHOW_DEBUG){
     drawDebugInfo();
   }
+
+  // オーディオがサスペンド中ならオーバーレイでタップを促す
+  if(!isAudioRunning()){
+    drawAudioOverlay();
+  }
 }
 
 function isAudioRunning(){
@@ -300,15 +305,15 @@ function updateFireVolume(){
   let targetVolume = map(
     touchVelocity,
     0,
-    1,
+    3,
     0.3,
-    1.0
+    2.0
   );
 
   targetVolume = constrain(
     targetVolume,
     0.3,
-    1.0
+    2.0
   );
 
   // なめらか補間
@@ -381,4 +386,18 @@ function windowResized(){
     windowWidth,
     windowHeight
   );
+}
+
+// オーディオがサスペンド状態のときに画面全体を覆う黒い透過オーバーレイを描画
+function drawAudioOverlay(){
+  push();
+  noStroke();
+  fill(0, 200);
+  rect(0, 0, width, height);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(min(width, height) * 0.04);
+  text("画面をタップしてください", width/2, height/2);
+  pop();
 }

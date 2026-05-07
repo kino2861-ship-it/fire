@@ -10,19 +10,10 @@ let interactionReady = false;
 let motionPermissionRequested = false;
 let ignitionRolledInCurrentDrag = false;
 let pendingFireSoundStart = false;
-let latestMotionPower = 0;
-let prevMotionX = null;
-let prevMotionY = null;
-let prevMotionZ = null;
-let prevGamma = null;
-let prevBeta = null;
-let motionEventCount = 0;
-let orientationEventCount = 0;
-let motionPermissionState = "unknown";
-let orientationPermissionState = "unknown";
-let motionListenersAttached = false;
-let orientationPermissionRequested = false;
-const SHOW_DEBUG = true;
+let touchVelocity = 0;
+let prevTouchX = null;
+let prevTouchY = null;
+let prevTouchTime = 0;
 
 let trails = [];
 
@@ -54,92 +45,6 @@ function setup(){
   fireVideo.volume(0);
 
   strokeCap(ROUND);
-
-  // 許可プロンプトなしで直接リスナーをつけてみる（古いバージョンやPWA向け）
-  attachMotionListeners();
-}
-
-function attachMotionListeners(){
-
-  if(motionListenersAttached){
-    console.log("Motion listeners already attached, skipping.");
-    return;
-  }
-
-  motionListenersAttached = true;
-  motionPermissionState = "listeners_attached_directly";
-  
-  console.log("Attaching motion listeners...");
-  console.log("DeviceMotionEvent available:", typeof DeviceMotionEvent !== "undefined");
-  console.log("DeviceOrientationEvent available:", typeof DeviceOrientationEvent !== "undefined");
-
-  // p5のacceleration値が取れない端末向けフォールバック
-  window.addEventListener("devicemotion", function(event){
-    motionEventCount++;
-    console.log("devicemotion event received:", event);
-
-    // 可能なら重力なし加速度を優先
-    let src = event.acceleration || event.accelerationIncludingGravity;
-
-    if(!src){
-      return;
-    }
-
-    let ax = Number(src.x) || 0;
-    let ay = Number(src.y) || 0;
-    let az = Number(src.z) || 0;
-
-    if(prevMotionX === null){
-      prevMotionX = ax;
-      prevMotionY = ay;
-      prevMotionZ = az;
-      return;
-    }
-
-    // 重力の定常成分を避けるため、前回値との差分をシェイク強度に使う
-    let dx = abs(ax - prevMotionX);
-    let dy = abs(ay - prevMotionY);
-    let dz = abs(az - prevMotionZ);
-
-    let instantPower = dx + dy + dz;
-
-    latestMotionPower = lerp(latestMotionPower, instantPower, 0.5);
-
-    prevMotionX = ax;
-    prevMotionY = ay;
-    prevMotionZ = az;
-  });
-
-  // devicemotionが使えない端末向けに角度変化も利用
-  window.addEventListener("deviceorientation", function(event){
-    orientationEventCount++;
-    console.log("deviceorientation event received:", event);
-
-    let gamma = Number(event.gamma);
-    let beta = Number(event.beta);
-
-    if(Number.isNaN(gamma) || Number.isNaN(beta)){
-      return;
-    }
-
-    if(prevGamma === null){
-      prevGamma = gamma;
-      prevBeta = beta;
-      return;
-    }
-
-    let dGamma = abs(gamma - prevGamma);
-    let dBeta = abs(beta - prevBeta);
-    let orientationPower = (dGamma + dBeta) * 0.08;
-
-    latestMotionPower = max(
-      latestMotionPower,
-      lerp(latestMotionPower, orientationPower, 0.4)
-    );
-
-    prevGamma = gamma;
-    prevBeta = beta;
-  });
 }
 
 function draw(){
@@ -227,10 +132,8 @@ function ensureInteractionReady(){
         ensureFireSoundPlaying();
       }
     }).catch(function(){
-      // 次の入力で再試行できるようにする
       interactionReady = false;
     });
-
   }
 
   if(!isAudioRunning()){
@@ -242,67 +145,6 @@ function ensureInteractionReady(){
     }).catch(function(){
       // 拒否時は次回入力で再試行
     });
-  }
-
-  if(
-    !motionPermissionRequested &&
-    typeof DeviceMotionEvent !== "undefined" &&
-    typeof DeviceMotionEvent.requestPermission === "function"
-  ){
-    motionPermissionRequested = true;
-
-    DeviceMotionEvent.requestPermission().then(function(result){
-      motionPermissionState = result;
-
-      if(result === "granted"){
-        attachMotionListeners();
-      }else{
-        // 次回の入力で再トライできるようにする
-        motionPermissionRequested = false;
-      }
-    }).catch(function(){
-      motionPermissionState = "denied";
-      motionPermissionRequested = false;
-    });
-  }else if(
-    typeof DeviceMotionEvent !== "undefined" &&
-    typeof DeviceMotionEvent.requestPermission !== "function"
-  ){
-    motionPermissionState = "granted";
-    attachMotionListeners();
-  }else if(typeof DeviceMotionEvent === "undefined"){
-    motionPermissionState = "unsupported";
-  }
-
-  if(
-    typeof DeviceOrientationEvent !== "undefined" &&
-    typeof DeviceOrientationEvent.requestPermission === "function" &&
-    !orientationPermissionRequested
-  ){
-    orientationPermissionRequested = true;
-
-    DeviceOrientationEvent.requestPermission().then(function(result){
-
-      orientationPermissionState = result;
-
-      if(result === "granted"){
-        attachMotionListeners();
-      }else{
-        // 次回の入力で再トライできるようにする
-        orientationPermissionRequested = false;
-      }
-    }).catch(function(){
-      orientationPermissionState = "denied";
-      orientationPermissionRequested = false;
-    });
-  }else if(
-    typeof DeviceOrientationEvent !== "undefined" &&
-    typeof DeviceOrientationEvent.requestPermission !== "function"
-  ){
-    orientationPermissionState = "granted";
-    attachMotionListeners();
-  }else if(typeof DeviceOrientationEvent === "undefined"){
-    orientationPermissionState = "unsupported";
   }
 }
 
@@ -317,6 +159,20 @@ function touchStarted(){
 function touchMoved(){
 
   ensureInteractionReady();
+
+  // タッチ移動速度を計算
+  let now = millis();
+  if(prevTouchX !== null && prevTouchY !== null && now > prevTouchTime){
+    let dx = mouseX - prevTouchX;
+    let dy = mouseY - prevTouchY;
+    let dt = now - prevTouchTime;
+    
+    touchVelocity = sqrt(dx*dx + dy*dy) / max(dt, 1);
+  }
+  
+  prevTouchX = mouseX;
+  prevTouchY = mouseY;
+  prevTouchTime = now;
 
   if(!burning){
 
@@ -350,6 +206,20 @@ function mouseDragged(){
 
   ensureInteractionReady();
 
+  // マウス移動速度を計算
+  let now = millis();
+  if(prevTouchX !== null && prevTouchY !== null && now > prevTouchTime){
+    let dx = mouseX - prevTouchX;
+    let dy = mouseY - prevTouchY;
+    let dt = now - prevTouchTime;
+    
+    touchVelocity = sqrt(dx*dx + dy*dy) / max(dt, 1);
+  }
+  
+  prevTouchX = mouseX;
+  prevTouchY = mouseY;
+  prevTouchTime = now;
+
   if(!burning){
 
     trails.push({
@@ -378,6 +248,8 @@ function mouseDragged(){
 function touchEnded(){
 
   ignitionRolledInCurrentDrag = false;
+  prevTouchX = null;
+  prevTouchY = null;
 
   return false;
 }
@@ -392,6 +264,8 @@ function mousePressed(){
 function mouseReleased(){
 
   ignitionRolledInCurrentDrag = false;
+  prevTouchX = null;
+  prevTouchY = null;
 
   return false;
 }
@@ -408,18 +282,11 @@ function startBurning(){
 
 function updateFireVolume(){
 
-  // 振る強さ（devicemotion差分ベース）
-  let shakePower = latestMotionPower;
-
-  // 無操作時に徐々に下がるように減衰
-  latestMotionPower *= 0.92;
-
-  // 音量計算
-
+  // スライド速度から音量を計算
   let targetVolume = map(
-    shakePower,
-    0.1,
-    2.5,
+    touchVelocity,
+    1,
+    5,
     0.3,
     1.0
   );
@@ -431,14 +298,16 @@ function updateFireVolume(){
   );
 
   // なめらか補間
-
   fireVolume = lerp(
     fireVolume,
     targetVolume,
-    0.1
+    0.15
   );
 
   fireSound.setVolume(fireVolume);
+  
+  // 速度減衰
+  touchVelocity *= 0.88;
 }
 
 function drawDebugInfo(){
@@ -446,27 +315,19 @@ function drawDebugInfo(){
   push();
   noStroke();
   fill(0, 160);
-  rect(12, 12, 360, 144, 8);
+  rect(12, 12, 260, 80, 8);
 
   fill(255);
-  textSize(12);
+  textSize(14);
   textAlign(LEFT, TOP);
 
   let ctxState = getAudioContext().state;
-  let shakeText = nf(latestMotionPower, 1, 3);
+  let velocityText = nf(touchVelocity, 1, 2);
   let volumeText = nf(fireVolume, 1, 3);
-  let secureText = window.isSecureContext ? "https/secure" : "not-secure";
-  let isStandalone = window.navigator.standalone === true ? "PWA" : "Browser";
-  
+
   text("ctx: " + ctxState, 22, 22);
-  text("shake: " + shakeText, 22, 36);
-  text("volume: " + volumeText, 22, 50);
-  text("motionPerm: " + motionPermissionState + " / oriPerm: " + orientationPermissionState, 22, 64);
-  text("motionEvt: " + motionEventCount + " / oriEvt: " + orientationEventCount, 22, 78);
-  text("context: " + secureText + " / " + isStandalone, 22, 92);
-  text("listeners: " + (motionListenersAttached ? "ON" : "OFF"), 22, 106);
-  text("deviceMotionAPI: " + (typeof DeviceMotionEvent !== "undefined" ? "YES" : "NO"), 22, 120);
-  text("deviceOrientationAPI: " + (typeof DeviceOrientationEvent !== "undefined" ? "YES" : "NO"), 22, 134);
+  text("velocity: " + velocityText, 22, 42);
+  text("volume: " + volumeText, 22, 62);
   pop();
 }
 

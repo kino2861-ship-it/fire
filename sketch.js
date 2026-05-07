@@ -14,6 +14,7 @@ let touchVelocity = 0;
 let prevTouchX = null;
 let prevTouchY = null;
 let prevTouchTime = 0;
+let lastIgnitionRand = null;
 
 let trails = [];
 
@@ -155,6 +156,10 @@ function touchStarted(){
 
   ensureInteractionReady();
   ignitionRolledInCurrentDrag = false;
+  // 初期化して大きな dt による速度誤検出を防ぐ
+  prevTouchX = mouseX;
+  prevTouchY = mouseY;
+  prevTouchTime = millis();
 
   return false;
 }
@@ -189,12 +194,16 @@ function touchMoved(){
     // 着火音
     playTyakkaIfReady();
 
-    // 1スライドにつき1回だけ10%で着火判定
-    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
+    // 1スライドにつき1回だけ10%で着火判定（ログ追加）
+    if(!ignitionRolledInCurrentDrag){
+      let r = random(1);
+      lastIgnitionRand = r;
+      console.log('ignition-check', r, ignitionRolledInCurrentDrag);
 
-      ignitionRolledInCurrentDrag = true;
-
-      startBurning();
+      if(r < 0.1){
+        ignitionRolledInCurrentDrag = true;
+        startBurning();
+      }
     }
 
   }
@@ -230,11 +239,15 @@ function mouseDragged(){
 
     playTyakkaIfReady();
 
-    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
+    if(!ignitionRolledInCurrentDrag){
+      let r = random(1);
+      lastIgnitionRand = r;
+      console.log('ignition-check (mouse)', r, ignitionRolledInCurrentDrag);
 
-      ignitionRolledInCurrentDrag = true;
-
-      startBurning();
+      if(r < 0.1){
+        ignitionRolledInCurrentDrag = true;
+        startBurning();
+      }
     }
 
   }
@@ -254,6 +267,9 @@ function touchEnded(){
 function mousePressed(){
 
   ignitionRolledInCurrentDrag = false;
+  prevTouchX = mouseX;
+  prevTouchY = mouseY;
+  prevTouchTime = millis();
 
   return false;
 }
@@ -313,7 +329,7 @@ function drawDebugInfo(){
   push();
   noStroke();
   fill(0, 160);
-  rect(12, 12, 260, 80, 8);
+  rect(12, 12, 260, 104, 8);
 
   fill(255);
   textSize(14);
@@ -322,10 +338,12 @@ function drawDebugInfo(){
   let ctxState = getAudioContext().state;
   let velocityText = nf(touchVelocity, 1, 2);
   let volumeText = nf(fireVolume, 1, 3);
+  let lastRandText = lastIgnitionRand === null ? "-" : nf(lastIgnitionRand, 1, 3);
 
   text("ctx: " + ctxState, 22, 22);
   text("velocity: " + velocityText, 22, 42);
   text("volume: " + volumeText, 22, 62);
+  text("lastRand: " + lastRandText, 22, 82);
   pop();
 }
 

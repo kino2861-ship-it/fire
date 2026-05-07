@@ -19,7 +19,9 @@ let prevBeta = null;
 let motionEventCount = 0;
 let orientationEventCount = 0;
 let motionPermissionState = "unknown";
+let orientationPermissionState = "unknown";
 let motionListenersAttached = false;
+let orientationPermissionRequested = false;
 const SHOW_DEBUG = true;
 
 let trails = [];
@@ -243,9 +245,13 @@ function ensureInteractionReady(){
 
       if(result === "granted"){
         attachMotionListeners();
+      }else{
+        // 次回の入力で再トライできるようにする
+        motionPermissionRequested = false;
       }
     }).catch(function(){
       motionPermissionState = "denied";
+      motionPermissionRequested = false;
     });
   }else if(
     typeof DeviceMotionEvent !== "undefined" &&
@@ -260,15 +266,32 @@ function ensureInteractionReady(){
   if(
     typeof DeviceOrientationEvent !== "undefined" &&
     typeof DeviceOrientationEvent.requestPermission === "function" &&
-    !motionPermissionRequested
+    !orientationPermissionRequested
   ){
+    orientationPermissionRequested = true;
+
     DeviceOrientationEvent.requestPermission().then(function(result){
+
+      orientationPermissionState = result;
+
       if(result === "granted"){
         attachMotionListeners();
+      }else{
+        // 次回の入力で再トライできるようにする
+        orientationPermissionRequested = false;
       }
     }).catch(function(){
-      // 拒否時はそのまま継続
+      orientationPermissionState = "denied";
+      orientationPermissionRequested = false;
     });
+  }else if(
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof DeviceOrientationEvent.requestPermission !== "function"
+  ){
+    orientationPermissionState = "granted";
+    attachMotionListeners();
+  }else if(typeof DeviceOrientationEvent === "undefined"){
+    orientationPermissionState = "unsupported";
   }
 }
 
@@ -426,7 +449,7 @@ function drawDebugInfo(){
   text("ctx: " + ctxState, 22, 22);
   text("shake: " + shakeText, 22, 42);
   text("volume: " + volumeText, 22, 62);
-  text("motionPerm: " + motionPermissionState, 22, 82);
+  text("motionPerm: " + motionPermissionState + " / oriPerm: " + orientationPermissionState, 22, 82);
   text("motionEvt: " + motionEventCount + " / oriEvt: " + orientationEventCount, 22, 102);
   text("context: " + secureText, 22, 122);
   pop();

@@ -14,8 +14,7 @@ let latestMotionPower = 0;
 let prevMotionX = null;
 let prevMotionY = null;
 let prevMotionZ = null;
-const SLIDE_COOLDOWN_MS = 2000;
-let lastSlideAcceptedAt = -SLIDE_COOLDOWN_MS;
+const SHOW_DEBUG = true;
 
 let trails = [];
 
@@ -51,7 +50,8 @@ function setup(){
   // p5のacceleration値が取れない端末向けフォールバック
   window.addEventListener("devicemotion", function(event){
 
-    let src = event.accelerationIncludingGravity || event.acceleration;
+    // 可能なら重力なし加速度を優先
+    let src = event.acceleration || event.accelerationIncludingGravity;
 
     if(!src){
       return;
@@ -118,6 +118,10 @@ function draw(){
     ensureFireSoundPlaying();
 
     updateFireVolume();
+  }
+
+  if(SHOW_DEBUG){
+    drawDebugInfo();
   }
 }
 
@@ -194,18 +198,6 @@ function ensureInteractionReady(){
   }
 }
 
-function canAcceptSlide(){
-
-  let now = millis();
-
-  if(now - lastSlideAcceptedAt < SLIDE_COOLDOWN_MS){
-    return false;
-  }
-
-  lastSlideAcceptedAt = now;
-  return true;
-}
-
 function touchStarted(){
 
   ensureInteractionReady();
@@ -217,10 +209,6 @@ function touchStarted(){
 function touchMoved(){
 
   ensureInteractionReady();
-
-  if(!canAcceptSlide()){
-    return false;
-  }
 
   if(!burning){
 
@@ -253,10 +241,6 @@ function touchMoved(){
 function mouseDragged(){
 
   ensureInteractionReady();
-
-  if(!canAcceptSlide()){
-    return false;
-  }
 
   if(!burning){
 
@@ -316,23 +300,18 @@ function startBurning(){
 
 function updateFireVolume(){
 
-  // 振る強さ（値の変化量ベース）
-
-  let p5Power =
-    abs(Number(accelerationX) || 0) +
-    abs(Number(accelerationY) || 0);
-
-  let shakePower = max(p5Power, latestMotionPower);
+  // 振る強さ（devicemotion差分ベース）
+  let shakePower = latestMotionPower;
 
   // 無操作時に徐々に下がるように減衰
-  latestMotionPower *= 0.9;
+  latestMotionPower *= 0.92;
 
   // 音量計算
 
   let targetVolume = map(
     shakePower,
-    0,
-    8,
+    0.1,
+    2.5,
     0.3,
     1.0
   );
@@ -352,6 +331,27 @@ function updateFireVolume(){
   );
 
   fireSound.setVolume(fireVolume);
+}
+
+function drawDebugInfo(){
+
+  push();
+  noStroke();
+  fill(0, 160);
+  rect(12, 12, 220, 74, 8);
+
+  fill(255);
+  textSize(14);
+  textAlign(LEFT, TOP);
+
+  let ctxState = getAudioContext().state;
+  let shakeText = nf(latestMotionPower, 1, 3);
+  let volumeText = nf(fireVolume, 1, 3);
+
+  text("ctx: " + ctxState, 22, 22);
+  text("shake: " + shakeText, 22, 42);
+  text("volume: " + volumeText, 22, 62);
+  pop();
 }
 
 function drawTrails(){

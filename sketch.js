@@ -11,6 +11,11 @@ let motionPermissionRequested = false;
 let ignitionRolledInCurrentDrag = false;
 let pendingFireSoundStart = false;
 let latestMotionPower = 0;
+let prevMotionX = null;
+let prevMotionY = null;
+let prevMotionZ = null;
+const SLIDE_COOLDOWN_MS = 2000;
+let lastSlideAcceptedAt = -SLIDE_COOLDOWN_MS;
 
 let trails = [];
 
@@ -54,8 +59,27 @@ function setup(){
 
     let ax = Number(src.x) || 0;
     let ay = Number(src.y) || 0;
+    let az = Number(src.z) || 0;
 
-    latestMotionPower = abs(ax) + abs(ay);
+    if(prevMotionX === null){
+      prevMotionX = ax;
+      prevMotionY = ay;
+      prevMotionZ = az;
+      return;
+    }
+
+    // 重力の定常成分を避けるため、前回値との差分をシェイク強度に使う
+    let dx = abs(ax - prevMotionX);
+    let dy = abs(ay - prevMotionY);
+    let dz = abs(az - prevMotionZ);
+
+    let instantPower = dx + dy + dz;
+
+    latestMotionPower = lerp(latestMotionPower, instantPower, 0.5);
+
+    prevMotionX = ax;
+    prevMotionY = ay;
+    prevMotionZ = az;
   });
 }
 
@@ -170,6 +194,18 @@ function ensureInteractionReady(){
   }
 }
 
+function canAcceptSlide(){
+
+  let now = millis();
+
+  if(now - lastSlideAcceptedAt < SLIDE_COOLDOWN_MS){
+    return false;
+  }
+
+  lastSlideAcceptedAt = now;
+  return true;
+}
+
 function touchStarted(){
 
   ensureInteractionReady();
@@ -181,6 +217,10 @@ function touchStarted(){
 function touchMoved(){
 
   ensureInteractionReady();
+
+  if(!canAcceptSlide()){
+    return false;
+  }
 
   if(!burning){
 
@@ -194,8 +234,8 @@ function touchMoved(){
     // 着火音
     playTyakkaIfReady();
 
-    // 1スライドにつき1回だけ10%で着火判定
-    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
+    // 1スライドにつき1回だけ25%で着火判定
+    if(!ignitionRolledInCurrentDrag && random(1) < 0.25){
 
       ignitionRolledInCurrentDrag = true;
 
@@ -214,6 +254,10 @@ function mouseDragged(){
 
   ensureInteractionReady();
 
+  if(!canAcceptSlide()){
+    return false;
+  }
+
   if(!burning){
 
     trails.push({
@@ -224,7 +268,7 @@ function mouseDragged(){
 
     playTyakkaIfReady();
 
-    if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
+    if(!ignitionRolledInCurrentDrag && random(1) < 0.25){
 
       ignitionRolledInCurrentDrag = true;
 
@@ -272,7 +316,7 @@ function startBurning(){
 
 function updateFireVolume(){
 
-  // 振る強さ（p5値 + devicemotionフォールバック）
+  // 振る強さ（値の変化量ベース）
 
   let p5Power =
     abs(Number(accelerationX) || 0) +
@@ -280,12 +324,15 @@ function updateFireVolume(){
 
   let shakePower = max(p5Power, latestMotionPower);
 
+  // 無操作時に徐々に下がるように減衰
+  latestMotionPower *= 0.9;
+
   // 音量計算
 
   let targetVolume = map(
     shakePower,
     0,
-    20,
+    8,
     0.3,
     1.0
   );

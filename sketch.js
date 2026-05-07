@@ -9,6 +9,8 @@ let burning = false;
 let interactionReady = false;
 let motionPermissionRequested = false;
 let ignitionRolledInCurrentDrag = false;
+let pendingFireSoundStart = false;
+let latestMotionPower = 0;
 
 let trails = [];
 
@@ -40,6 +42,21 @@ function setup(){
   fireVideo.volume(0);
 
   strokeCap(ROUND);
+
+  // p5のacceleration値が取れない端末向けフォールバック
+  window.addEventListener("devicemotion", function(event){
+
+    let src = event.accelerationIncludingGravity || event.acceleration;
+
+    if(!src){
+      return;
+    }
+
+    let ax = Number(src.x) || 0;
+    let ay = Number(src.y) || 0;
+
+    latestMotionPower = abs(ax) + abs(ay);
+  });
 }
 
 function draw(){
@@ -74,17 +91,71 @@ function draw(){
 
     blendMode(BLEND);
 
+    ensureFireSoundPlaying();
+
     updateFireVolume();
+  }
+}
+
+function isAudioRunning(){
+
+  return getAudioContext().state === "running";
+}
+
+function ensureFireSoundPlaying(){
+
+  if(!burning){
+    return;
+  }
+
+  if(isAudioRunning()){
+
+    if(!fireSound.isPlaying()){
+      fireSound.loop();
+      fireSound.setVolume(fireVolume);
+    }
+
+    pendingFireSoundStart = false;
+    return;
+  }
+
+  pendingFireSoundStart = true;
+}
+
+function playTyakkaIfReady(){
+
+  if(isAudioRunning() && !tyakkaSound.isPlaying()){
+    tyakkaSound.play();
   }
 }
 
 function ensureInteractionReady(){
 
-  if(interactionReady){
-    return;
+  if(!interactionReady){
+    interactionReady = true;
+
+    userStartAudio().then(function(){
+
+      if(pendingFireSoundStart){
+        ensureFireSoundPlaying();
+      }
+    }).catch(function(){
+      // 次の入力で再試行できるようにする
+      interactionReady = false;
+    });
+
   }
 
-  userStartAudio();
+  if(!isAudioRunning()){
+    getAudioContext().resume().then(function(){
+
+      if(pendingFireSoundStart){
+        ensureFireSoundPlaying();
+      }
+    }).catch(function(){
+      // 拒否時は次回入力で再試行
+    });
+  }
 
   if(
     !motionPermissionRequested &&
@@ -97,8 +168,6 @@ function ensureInteractionReady(){
       // 拒否時はそのまま継続
     });
   }
-
-  interactionReady = true;
 }
 
 function touchStarted(){
@@ -123,9 +192,7 @@ function touchMoved(){
     });
 
     // 着火音
-    if(!tyakkaSound.isPlaying()){
-      tyakkaSound.play();
-    }
+    playTyakkaIfReady();
 
     // 1スライドにつき1回だけ10%で着火判定
     if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
@@ -155,9 +222,7 @@ function mouseDragged(){
       life: 255
     });
 
-    if(!tyakkaSound.isPlaying()){
-      tyakkaSound.play();
-    }
+    playTyakkaIfReady();
 
     if(!ignitionRolledInCurrentDrag && random(1) < 0.1){
 
@@ -201,25 +266,26 @@ function startBurning(){
 
   fireVideo.loop();
 
-  fireSound.loop();
-
-  fireSound.setVolume(0.3);
+  pendingFireSoundStart = true;
+  ensureFireSoundPlaying();
 }
 
 function updateFireVolume(){
 
-  // 振る強さ
+  // 振る強さ（p5値 + devicemotionフォールバック）
 
-  let shakePower =
-    abs(accelerationX) +
-    abs(accelerationY);
+  let p5Power =
+    abs(Number(accelerationX) || 0) +
+    abs(Number(accelerationY) || 0);
+
+  let shakePower = max(p5Power, latestMotionPower);
 
   // 音量計算
 
   let targetVolume = map(
     shakePower,
     0,
-    50,
+    20,
     0.3,
     1.0
   );

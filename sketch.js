@@ -18,6 +18,7 @@ let prevTouchTime = 0;
 let trails = [];
 
 let fireVolume = 0.3;
+const SHOW_DEBUG = true;
 
 function preload(){
 
@@ -40,6 +41,7 @@ function setup(){
   fireVideo.attribute("playsinline", "");
   fireVideo.attribute("webkit-playsinline", "");
 
+  // 動画はDOMで非表示にしてキャンバスへ描画
   fireVideo.hide();
 
   fireVideo.volume(0);
@@ -63,7 +65,7 @@ function draw(){
   // 赤い軌跡
   drawTrails();
 
-  // 燃焼状態
+  // 燃焼状態（炎は動画をキャンバスへ描画）
   if(burning){
 
     // 黒背景を透過的に扱って炎だけを重ねる
@@ -80,9 +82,10 @@ function draw(){
     blendMode(BLEND);
 
     ensureFireSoundPlaying();
-
-    updateFireVolume();
   }
+
+  // 常に音量更新（燃焼中に fireSound が再生されていれば反映される）
+  updateFireVolume();
 
   if(SHOW_DEBUG){
     drawDebugInfo();
@@ -194,9 +197,6 @@ function touchMoved(){
       startBurning();
     }
 
-    if(!ignitionRolledInCurrentDrag){
-      ignitionRolledInCurrentDrag = true;
-    }
   }
 
   return false;
@@ -237,9 +237,6 @@ function mouseDragged(){
       startBurning();
     }
 
-    if(!ignitionRolledInCurrentDrag){
-      ignitionRolledInCurrentDrag = true;
-    }
   }
 
   return false;
@@ -275,6 +272,7 @@ function startBurning(){
   burning = true;
 
   fireVideo.loop();
+  fireVideo.play();
 
   pendingFireSoundStart = true;
   ensureFireSoundPlaying();
@@ -285,8 +283,8 @@ function updateFireVolume(){
   // スライド速度から音量を計算
   let targetVolume = map(
     touchVelocity,
+    0,
     1,
-    5,
     0.3,
     1.0
   );

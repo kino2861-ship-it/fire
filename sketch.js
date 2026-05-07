@@ -14,6 +14,12 @@ let latestMotionPower = 0;
 let prevMotionX = null;
 let prevMotionY = null;
 let prevMotionZ = null;
+let prevGamma = null;
+let prevBeta = null;
+let motionEventCount = 0;
+let orientationEventCount = 0;
+let motionPermissionState = "unknown";
+let motionListenersAttached = false;
 const SHOW_DEBUG = true;
 
 let trails = [];
@@ -46,9 +52,19 @@ function setup(){
   fireVideo.volume(0);
 
   strokeCap(ROUND);
+}
+
+function attachMotionListeners(){
+
+  if(motionListenersAttached){
+    return;
+  }
+
+  motionListenersAttached = true;
 
   // p5のacceleration値が取れない端末向けフォールバック
   window.addEventListener("devicemotion", function(event){
+    motionEventCount++;
 
     // 可能なら重力なし加速度を優先
     let src = event.acceleration || event.accelerationIncludingGravity;
@@ -80,6 +96,36 @@ function setup(){
     prevMotionX = ax;
     prevMotionY = ay;
     prevMotionZ = az;
+  });
+
+  // devicemotionが使えない端末向けに角度変化も利用
+  window.addEventListener("deviceorientation", function(event){
+    orientationEventCount++;
+
+    let gamma = Number(event.gamma);
+    let beta = Number(event.beta);
+
+    if(Number.isNaN(gamma) || Number.isNaN(beta)){
+      return;
+    }
+
+    if(prevGamma === null){
+      prevGamma = gamma;
+      prevBeta = beta;
+      return;
+    }
+
+    let dGamma = abs(gamma - prevGamma);
+    let dBeta = abs(beta - prevBeta);
+    let orientationPower = (dGamma + dBeta) * 0.08;
+
+    latestMotionPower = max(
+      latestMotionPower,
+      lerp(latestMotionPower, orientationPower, 0.4)
+    );
+
+    prevGamma = gamma;
+    prevBeta = beta;
   });
 }
 
@@ -192,7 +238,35 @@ function ensureInteractionReady(){
   ){
     motionPermissionRequested = true;
 
-    DeviceMotionEvent.requestPermission().catch(function(){
+    DeviceMotionEvent.requestPermission().then(function(result){
+      motionPermissionState = result;
+
+      if(result === "granted"){
+        attachMotionListeners();
+      }
+    }).catch(function(){
+      motionPermissionState = "denied";
+    });
+  }else if(
+    typeof DeviceMotionEvent !== "undefined" &&
+    typeof DeviceMotionEvent.requestPermission !== "function"
+  ){
+    motionPermissionState = "granted";
+    attachMotionListeners();
+  }else if(typeof DeviceMotionEvent === "undefined"){
+    motionPermissionState = "unsupported";
+  }
+
+  if(
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof DeviceOrientationEvent.requestPermission === "function" &&
+    !motionPermissionRequested
+  ){
+    DeviceOrientationEvent.requestPermission().then(function(result){
+      if(result === "granted"){
+        attachMotionListeners();
+      }
+    }).catch(function(){
       // 拒否時はそのまま継続
     });
   }
@@ -338,7 +412,7 @@ function drawDebugInfo(){
   push();
   noStroke();
   fill(0, 160);
-  rect(12, 12, 220, 74, 8);
+  rect(12, 12, 290, 124, 8);
 
   fill(255);
   textSize(14);
@@ -347,10 +421,14 @@ function drawDebugInfo(){
   let ctxState = getAudioContext().state;
   let shakeText = nf(latestMotionPower, 1, 3);
   let volumeText = nf(fireVolume, 1, 3);
+  let secureText = window.isSecureContext ? "https/secure" : "not-secure";
 
   text("ctx: " + ctxState, 22, 22);
   text("shake: " + shakeText, 22, 42);
   text("volume: " + volumeText, 22, 62);
+  text("motionPerm: " + motionPermissionState, 22, 82);
+  text("motionEvt: " + motionEventCount + " / oriEvt: " + orientationEventCount, 22, 102);
+  text("context: " + secureText, 22, 122);
   pop();
 }
 
